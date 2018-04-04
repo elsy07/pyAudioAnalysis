@@ -1,23 +1,25 @@
-import numpy
-import sklearn.cluster
-import time
-import scipy
-import os
-import audioFeatureExtraction as aF
-import audioTrainTest as aT
-import audioBasicIO
-import matplotlib.pyplot as plt
-from scipy.spatial import distance
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import sklearn.discriminant_analysis
+# -*- coding: UTF-8 –*-
+
+import cPickle
 import csv
+import glob
+import os
 import os.path
+
+import hmmlearn.hmm
+import matplotlib.pyplot as plt
+import numpy
+import scipy
 import sklearn
 import sklearn.cluster
-import hmmlearn.hmm
-import cPickle
-import glob
+import sklearn.cluster
+import sklearn.discriminant_analysis
+from scipy.spatial import distance
+
+import audioBasicIO
+import audioFeatureExtraction as aF
+import audioTrainTest as aT
+import utilities
 
 """ General utility functions """
 
@@ -91,7 +93,49 @@ def flags2segs(Flags, window):
         if i > 0:
             segs[i, 0] = segsList[i-1]
         segs[i, 1] = segsList[i]
+
+
     return (segs, classes)
+
+def generateSegement((segs,classes), segFileName):
+
+    print "segFileName是：" + segFileName
+
+    segFile = open(segFileName, "wb+")
+    tmpFile = open("tmp.segment", "wb+")
+    segWriter = csv.writer(segFile)
+    tmpWriter = csv.writer(tmpFile)
+
+    for i in range(len(segs)):
+        secStart = int(segs[i][0])
+        secStop = int(segs[i][1])
+        timeStart = str(secStart / 3600) + ":" + str(secStart % 3600 / 60) + ":" + str(secStart % 60)
+        timeStop = str(secStop / 3600) + ":" + str(secStop % 3600 / 60) + ":" + str(secStop % 60)
+        # 写入超过100秒的nusic的（开始，结束）时间
+        segWriter.writerow([timeStart, timeStop, classes[i]])
+        if classes[i] == "music":
+            if (secStop - secStart) >= 100:
+                tmpWriter.writerow([secStart,secStop])
+
+    segFile.close()
+    tmpFile.close()
+    return
+
+
+def segWAV(inputFile):
+
+    f = open("tmp.segment", "rb+")
+    reader = csv.reader(f, delimiter=',')
+    # 切分点初始化时添加开始点——-0
+    delimit_points = [0]
+
+    for row in reader:
+        delimit_points.append(int(row[0]))
+        delimit_points.append(int(row[1]))
+
+    delimit_list = utilities.cut(inputFile, delimit_points)
+    f.close()
+    return delimit_list
 
 
 def segs2flags(segStart, segEnd, segLabel, winSize):
@@ -164,14 +208,22 @@ def readSegmentGT(gtFile):
     return numpy.array(segStart), numpy.array(segEnd), segLabel
 
 
-def plotSegmentationResults(flagsInd, flagsIndGT, classNames, mtStep, ONLY_EVALUATE=False):
+def plotSegmentationResults(flagsInd, flagsIndGT, classNames, mtStep, segFileName, ONLY_EVALUATE=False):
     '''
     This function plots statistics on the classification-segmentation results produced either by the fix-sized supervised method or the HMM method.
     It also computes the overall accuracy achieved by the respective method if ground-truth is available.
     '''    
     flags = [classNames[int(f)] for f in flagsInd]
-    (segs, classes) = flags2segs(flags, mtStep)    
-    minLength = min(flagsInd.shape[0], flagsIndGT.shape[0])    
+    (segs, classes) = flags2segs(flags, mtStep)
+    #print "【seg，classes】： "
+    #print (segs, classes)
+    generateSegement((segs,classes), segFileName)
+
+    numpy.set_printoptions(threshold=numpy.inf)
+
+
+
+    minLength = min(flagsInd.shape[0], flagsIndGT.shape[0])
     if minLength > 0:
         accuracy = numpy.sum(flagsInd[0:minLength] == flagsIndGT[0:minLength]) / float(minLength)
     else:
@@ -417,7 +469,7 @@ def trainHMM_fromDir(dirPath, hmmModelName, mtWin, mtStep):
     return hmm, classesAll
 
 
-def hmmSegmentation(wavFileName, hmmModelName, PLOT=False, gtFileName=""):
+def hmmSegmentation(wavFileName, hmmModelName,  segFileName, PLOT=False, gtFileName=""):
     [Fs, x] = audioBasicIO.readAudioFile(wavFileName)          # read audio data
 
     try:
@@ -458,7 +510,7 @@ def hmmSegmentation(wavFileName, hmmModelName, PLOT=False, gtFileName=""):
             CM[int(flagsIndGT[i]),int(flagsInd[i])] += 1                
     else:
         flagsIndGT = numpy.array([])    
-    acc = plotSegmentationResults(flagsInd, flagsIndGT, classesAll, mtStep, not PLOT)
+    acc = plotSegmentationResults(flagsInd, flagsIndGT, classesAll, mtStep, segFileName, not PLOT)
     if acc >= 0:
         print "Overall Accuracy: {0:.2f}".format(acc)
         return (flagsInd, classNamesGT, acc, CM)
@@ -467,7 +519,7 @@ def hmmSegmentation(wavFileName, hmmModelName, PLOT=False, gtFileName=""):
 
 
 
-def mtFileClassification(inputFile, modelName, modelType, plotResults=False, gtFile=""):
+def mtFileClassification(inputFile, modelName, modelType,  segFileName, plotResults=False, gtFile=""):
     '''
     This function performs mid-term classification of an audio stream.
     Towards this end, supervised knowledge is used, i.e. a pre-trained classifier.
@@ -524,6 +576,10 @@ def mtFileClassification(inputFile, modelName, modelType, plotResults=False, gtF
         if flagsInd[i-1] == flagsInd[i + 1]:
             flagsInd[i] = flagsInd[i + 1]
     (segs, classes) = flags2segs(flags, mtStep)            # convert fix-sized flags to segments and classes
+    numpy.set_printoptions(threshold=numpy.inf)
+    print (segs, classes)
+
+
     segs[-1] = len(x) / float(Fs)
 
     # Load grount-truth:        
@@ -543,7 +599,7 @@ def mtFileClassification(inputFile, modelName, modelType, plotResults=False, gtF
     else:
         CM = []
         flagsIndGT = numpy.array([])
-    acc = plotSegmentationResults(flagsInd, flagsIndGT, classNames, mtStep, not plotResults)
+    acc = plotSegmentationResults(flagsInd, flagsIndGT, classNames, mtStep, not plotResults, segFileName)
     if acc >= 0:
         print "Overall Accuracy: {0:.3f}".format(acc)    
         return (flagsInd, classNamesGT, acc, CM)
