@@ -1,8 +1,9 @@
 # -*- coding: UTF-8 –*-
 import json
-import numpy
 import sys
 import uuid
+
+import numpy
 
 import sh
 
@@ -42,8 +43,8 @@ def generateGUID():
     生成一个GUID
     :return: GUID
     """
-
-    return uuid.uuid1()
+    guid = str(uuid.uuid1())
+    return guid
 
 
 def peakdet(v, delta, x = None):

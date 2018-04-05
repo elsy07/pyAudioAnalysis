@@ -1,10 +1,17 @@
 # -*- coding: UTF-8 –*-
+import time
+
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, mapper
+from sqlalchemy.orm import sessionmaker, mapper, relationship
 
-# 创建对象的基类:
-Base = declarative_base()
+from utilities import generateGUID
+
+year = time.strftime('%Y',time.localtime(time.time()))#获取当前年
+print year
+
+
+
 
 # 初始化数据库连接:
 host = '10.5.6.101'
@@ -36,11 +43,11 @@ class Channel(object):
 channelmapper = mapper(Channel, Channels)
 
 
-# 映射t_PlayPlan2018表
-PlayPlan2018s = Table('t_PlayPlan2018', metadata, autoload=True)
-class PlayPlan2018(object):
+# 映射t_PlayPlan表
+PlayPlans = Table('t_PlayPlan' + year, metadata, autoload=True)
+class PlayPlan(object):
     pass
-PlayPlan2018mapper = mapper(PlayPlan2018, PlayPlan2018s)
+PlayPlanmapper = mapper(PlayPlan, PlayPlans)
 
 
 # 映射t_FeedBackType
@@ -71,13 +78,37 @@ class CompareResult(object):
 CompareResultmapper = mapper(CompareResult, CompareResults)
 
 
-# 映射t_FeedBack2018表
-FeedBack2018s = Table('t_FeedBack2018', metadata, autoload=True)
-class FeedBack2018(object):
+# 映射t_FeedBack表
+FeedBacks = Table('t_FeedBack' + year, metadata, autoload=True)
+class FeedBack(object):
     pass
-FeedBack2018mapper = mapper(FeedBack2018, FeedBack2018s)
+FeedBackmapper = mapper(FeedBack, FeedBacks)
 
 
+# 创建对象的基类:
+Base = declarative_base()
+
+
+# 定义口播广告对应关键词表
+class PlayPlanKeyword(Base):
+    __tablename__ = 't_PlayPlanKeyword' + year
+    id = Column('s_LoggerSegmentGuid', default=generateGUID(), primary_key=True)
+    keywords = Column('s_Keywords', VARCHAR, )
+
+    playplan_id = Column(Integer, ForeignKey('PlayPlan.s_PlayPlanGuid'))
+    playplan = relationship("PlayPlan")
+
+
+# 定义音频处理结果表
+class LoggerSegment(Base):
+    __tablename__ = 't_LoggerSegment'
+    id = Column('s_LoggerSegmentGuid', default=generateGUID(), primary_key=True)
+
+
+# 定义语音转写结果表
+class LfasrRecord(Base):
+    __tablename__ = 't_LfasrRecord'
+    id = Column('s_LfasrRecordGuid', default=generateGUID(), primary_key=True)
 
 def QueryChannelName(ChannelGUID, engine):
     # 创建DBSession类型:
