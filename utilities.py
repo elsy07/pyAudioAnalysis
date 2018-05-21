@@ -7,6 +7,20 @@ import numpy
 
 import sh
 
+import os
+
+import subprocess
+
+def run_command(command):
+    p = subprocess.Popen(command,
+                     stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT, stdin=subprocess.PIPE, shell=True)
+    return iter(p.stdout.readline, b'')
+
+def fileIndir(rootDir):
+    for lists in os.listdir(rootDir):
+        path = os.path.join(rootDir, lists)
+        print path
 
 def isfloat(x):
     """
@@ -131,7 +145,7 @@ def split(filepath):
 
 def cut(input_file, delimit_points):
     # 切分点加入终止点3600
-    delimit_points.append(3600)
+    delimit_points.append(7200)
 
     # 记录分段起止时间
     delimit_list = []
@@ -139,9 +153,9 @@ def cut(input_file, delimit_points):
         return
     path, name, suffix = split(input_file)
     for i in range(0, len(delimit_points) - 1, 2):
-        # 切出speech段落，文件名为"时间_开始-结束"
+        # 切出speech段落，文件名为"开始-结束"
         delimit_list.append([str(delimit_points[i]), str(delimit_points[i + 1])])
-        cmd = "ffmpeg -i " + input_file + " -acodec copy -ss " + str(delimit_points[i]) + " -to " + str(delimit_points[i + 1]) + " " + path + "/" + name + "/" + name + "_" + str(delimit_points[i]) + "-" + str(delimit_points[i + 1]) + "." + suffix
+        cmd = "ffmpeg -i " + input_file + " -acodec copy -ss " + str(delimit_points[i]) + " -to " + str(delimit_points[i + 1]) + " " + path + "/" + name + "/" + str(delimit_points[i]) + "-" + str(delimit_points[i + 1]) + "." + suffix
         sh.run(cmd)
         print delimit_list
 
@@ -188,24 +202,38 @@ def load(json_file):
         records_list = sorted(json_list, key=lambda k: int(k['bg']), reverse = False)
     return records_list
 
-def feedback(records_list, keywords):
+def feedback(jsondir, keywords):
     feedback = []
 
     for i in range(0, len(keywords)):
-
-        feedback.append({"key": keywords[i],
+        feedback.append({"keyword": keywords[i],
                          "spot": [],
                          "num": 0})
-        for j in range(0, len(records_list)):
-            if keywords[i] in records_list[j].get("onebest"):
-                secStart = int(records_list[j].get("bg")) / 1000
-                timeStart = str(secStart / 3600) + ":" + str(secStart % 3600 / 60) + ":" + str(secStart % 60)
-                feedback[i]["spot"].append(timeStart)
-                feedback[i]["num"] += 1
-                print(keywords[i] + ':' + timeStart)
-        if feedback[i]["num"] == 0:
-            print (keywords[i] + "：没说到")
-        print feedback[i]
-        print('--------------------------------')
+
+        print i
+        f_list = os.listdir(jsondir)
+        for f in f_list:
+            if os.path.splitext(f)[1] == ".json":
+                ss = f.split("-")[0]
+                records_list = load(jsondir + f)
+                for j in range(0, len(records_list)):
+                    if keywords[i] in records_list[j].get("onebest"):
+                        secStart = int(records_list[j].get("bg")) / 1000 + int(ss)
+                        timeStart = str(secStart / 3600) + ":" + str(secStart % 3600 / 60) + ":" + str(secStart % 60)
+                        feedback[i]["spot"].append(timeStart)
+                        feedback[i]["num"] += 1
+                        print(keywords[i] + ': ' + timeStart)
+                    if feedback[i]["num"] == 0:
+                        print (keywords[i] + "：没说到")
+                        # print feedback[i]
 
     return feedback
+
+
+def formateFeedback(feedback):
+    UserDefineFeedBackMark = ""
+    for i in feedback:
+        UserDefineFeedBackMark += "关键词 \"" + i["keyword"] + "\" 口播：" + str(i["num"]) + "次\n"
+
+    return UserDefineFeedBackMark
+

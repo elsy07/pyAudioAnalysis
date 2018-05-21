@@ -1,47 +1,61 @@
 # -*- coding: UTF-8 –*-
 #!/usr/bin/env python2
 import audioSegmentation as aS
-import sh
+import os, datetime,time
 import utilities
+import audioAnalysis
+import data
+import jpype
 
 if __name__ == '__main__':
 
+    AdType = u"OA口播广告"
+    RootDir = "/Users/nettech/Music/logger3/"
 
-    # 输入音频文件
-    audio = "/Users/nettech/Music/Logger/AM1053/20180302/08-00-00.m4a"
-    keywords = [u"中科", u"虫草"]
 
-    # 分开文件路径、文件名、后缀
-    path, name, suffix = utilities.split(audio)
-    print "文件路径: " + path + "\n文件名: " + name + "\n后缀: " + suffix
-    print('--------------------------------')
-    # m4a转换成mp3
-    #mp3_audio = utilities.convert(audio)
-    # 生成wav文件名和路径
-    wav_audio = path + "/" + name + ".wav"
-    print "wav文件路径预设为： " + wav_audio
-    print('--------------------------------')
-    # 批量文件路径下的mp3转wav
-    #audioAnalysis.dirMp3toWavWrapper(path, 16000, 1)
-    # hmm分段，并生成segment文件
-    segFileName = path + "/" + name + ".segment"
-    print "seg文件路径预设为： " + segFileName
-    print('--------------------------------')
-    #[flagsInd, classesAll, acc, CM] = aS.hmmSegmentation(wav_audio, "data/hmmRadioSM", segFileName, True, '')
-    # 根据seg去除100秒以上的music
-    cmd = "mkdir " + path + "/" + name
-    sh.run(cmd)
+    # 查询到口播广告type的guid
+    PlayPlanTypeGuid = data.QueryPlayPlanType(AdType)
 
-    # 记录分段起止时间
-    delimit_list = aS.segWAV(wav_audio)
+    # 获取昨天的日期
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    print yesterday
+    start = time.clock()
+    playplanlist, count = data.GetPlayPlan(yesterday, PlayPlanTypeGuid)
+    # program = data.SetAudioClipper(yesterday, playplanlist)
+    MP3Files = data.QueryFilePath2(yesterday, count)
 
-    # 读取转写结果
-    for i in (0, len(delimit_list)-1):
-        records_list = utilities.load(path + "/" + name + "/" + name + "_" + delimit_list[i][0] + "-" + delimit_list[i][1] + ".json")
+    for mp3 in MP3Files:
+        Mp3File = RootDir + mp3["filepath"]
+        print Mp3File
+        # mp3转wav
+        wav_audio = audioAnalysis.Mp3toWavWrapper(Mp3File, 16000, 1)
+        # hmm分段，并生成segment文件
+        segFileName = Mp3File.replace(".mp3", ".segment")
+        [flagsInd, classesAll, acc, CM] = aS.hmmSegmentation(wav_audio, "data/hmmRadioSM", segFileName, False, '')
+        print('---------------wav已分段-----------------')
+        newdir = str(os.path.splitext(Mp3File)[0])
+        print newdir
+        os.mkdir(newdir)
+        # 根据seg去除100秒以上的music、记录分段起止时间
+        delimit_list = aS.segWAV(wav_audio)
 
-        # 找到关键词出现的时间
-        feedback = utilities.feedback(records_list, keywords)
-        print "检查结果：" + str(feedback)
+        # 调用jar语音转写
+        command = "java -jar /Users/nettech/Music/iflytek-Mac.jar 5af90cd2 6b047cf236ba6471aa851269eea6d779" + newdir
+        for output_line in utilities.run_command(command):
+            print output_line
+
+        # 检查关键词
+        keywords = mp3["keywords"].split("，")
+        print keywords
+        feedback = utilities.feedback(newdir, keywords)
+        userdefinefeedbackmark = utilities.formateFeedback(feedback)
+    elapsed = (time.clock() - start)
+    print("Time used:", elapsed)
+
+
+
+
+
 
 
 

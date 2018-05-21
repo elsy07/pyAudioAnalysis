@@ -38,6 +38,25 @@ def convertDirMP3ToWav(dirName, Fs, nC, useMp3TagsAsName = False):
         print command
         os.system(command.decode('unicode_escape').encode('ascii','ignore').replace("\0",""))
 
+
+def convertMP3ToWav(f, Fs, nC):
+    '''
+    This function converts the MP3 file to WAV. If required, the output names of the WAV files are based on MP3 tags, otherwise the same names are used.
+    ARGUMENTS:
+     - f:     the path of the MP3
+     - Fs:          the sampling rate of the generated WAV files
+     - nC:          the number of channesl of the generated WAV files
+    '''
+
+    wavFileName = f.replace(".mp3",".wav")
+    command = "avconv -n -i \"" + f + "\" -ar " +str(Fs) + " -ac " + str(nC) + " \"" + wavFileName + "\"";
+    print command
+    os.system(command.decode('unicode_escape').encode('ascii','ignore').replace("\0",""))
+    return wavFileName
+
+
+
+
 def convertFsDirWavToWav(dirName, Fs, nC):
     '''
     This function converts the WAV files stored in a folder to WAV using a different sampling freq and number of channels.
